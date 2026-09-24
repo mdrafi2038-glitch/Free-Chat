@@ -188,7 +188,7 @@ public class MainActivity extends Activity {
           .setNeutralButton("Manage",null).create().show();
     }
     void editProvider(int index){
-        boolean isNew=index<0; if(isNew) index=prefs.getInt("provider_count",1);
+        boolean isNew=index<0; if(isNew) index=prefs.getInt("provider_count",1); final int idx=index;
         LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); l.setPadding(dp(18),0,dp(18),0);
         EditText name=new EditText(this); name.setHint("API name"); name.setSingleLine(true);
         EditText base=new EditText(this); base.setHint("Base URL e.g. https://example.com"); base.setSingleLine(true);
@@ -198,13 +198,13 @@ public class MainActivity extends Activity {
         if(!isNew){name.setText(prefs.getString("provider_name_"+index,""));base.setText(prefs.getString("provider_base_"+index,""));key.setText(prefs.getString("provider_key_"+index,""));mp.setText(prefs.getString("provider_models_"+index,"/v1/models"));cp.setText(prefs.getString("provider_chat_"+index,"/v1/chat/completions"));}
         l.addView(name);l.addView(base);l.addView(key);l.addView(mp);l.addView(cp);
         new AlertDialog.Builder(this).setTitle(isNew?"Add API":"Edit API").setView(l).setPositiveButton("Save",(d,w)->{
-            prefs.edit().putString("provider_name_"+index,name.getText().toString().trim().isEmpty()?"API "+(index+1):name.getText().toString().trim())
+            prefs.edit().putString("provider_name_"+index,name.getText().toString().trim().isEmpty()?"API "+(idx+1):name.getText().toString().trim())
               .putString("provider_base_"+index,base.getText().toString().trim().replaceAll("/$",""))
               .putString("provider_key_"+index,key.getText().toString().trim())
               .putString("provider_models_"+index,mp.getText().toString().trim())
               .putString("provider_chat_"+index,cp.getText().toString().trim())
-              .putInt("provider_count",Math.max(prefs.getInt("provider_count",1),index+1)).apply();
-            activeProvider=index; loadProvider(); loadModels();
+              .putInt("provider_count",Math.max(prefs.getInt("provider_count",1),idx+1)).apply();
+            activeProvider=idx; loadProvider(); loadModels();
         }).setNegativeButton("Cancel",null).show();
     }
     void showSettings(){
