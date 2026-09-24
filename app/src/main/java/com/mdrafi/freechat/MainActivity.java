@@ -21,10 +21,11 @@ public class MainActivity extends Activity {
     EditText input;
     TextView modelButton, status, welcomeTitle, welcomeSub;
     ArrayList<String> models=new ArrayList<>(), modelIds=new ArrayList<>();
+    ArrayList<String> providers=new ArrayList<>();
     SharedPreferences prefs;
-    int selectedModel=0;
-    final String BASE="https://vyceai.com";
+    int selectedModel=0, activeProvider=0;
     boolean dark=true;
+    String apiBase="https://vyceai.com", modelsPath="/v1/models", chatPath="/v1/chat/completions";
 
     int dp(float v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
     int bg(){return Color.parseColor(dark?"#171717":"#F7F7F5");}
@@ -117,10 +118,12 @@ public class MainActivity extends Activity {
         }).setNegativeButton("Cancel",null).show();
     }
     void loadModels(){
+        loadProvider();
         new Thread(()->{try{
-            String key=prefs.getString("key","");
+            String key=prefs.getString("provider_key_")+activeProvider,"");
+            if(key.isEmpty()){runOnUiThread(()->status.setText("Add API key in ⚙ → API Manager"));return;}
             if(key.isEmpty()){runOnUiThread(()->status.setText("Add API key in ⚙"));return;}
-            HttpsURLConnection c=(HttpsURLConnection)new URL(BASE+"/v1/models").openConnection();
+            HttpsURLConnection c=(HttpsURLConnection)new URL(apiBase+modelsPath).openConnection();
             c.setRequestProperty("Authorization","Bearer "+key); c.setConnectTimeout(15000); c.setReadTimeout(15000);
             JSONObject o=new JSONObject(read(c)); JSONArray a=o.getJSONArray("data");
             models.clear(); modelIds.clear();
@@ -130,7 +133,8 @@ public class MainActivity extends Activity {
     }
     void send(){
         String q=input.getText().toString().trim(); if(q.isEmpty())return;
-        String key=prefs.getString("key","");
+        loadProvider();
+        String key=prefs.getString("provider_key_"+activeProvider,"");
         if(key.isEmpty()){showSettings();return;}
         if(modelIds.isEmpty()){Toast.makeText(this,"Please load a model first",Toast.LENGTH_SHORT).show();return;}
         if(welcomeTitle!=null){messages.removeView(welcomeTitle);messages.removeView(welcomeSub);welcomeTitle=null;welcomeSub=null;}
@@ -139,7 +143,7 @@ public class MainActivity extends Activity {
         TextView thinking=text(model+"  •  Thinking…",13); thinking.setTextColor(muted()); thinking.setPadding(0,dp(16),0,dp(16));
         messages.addView(thinking); scrollBottom();
         new Thread(()->{try{
-            HttpsURLConnection c=(HttpsURLConnection)new URL(BASE+"/v1/chat/completions").openConnection();
+            HttpsURLConnection c=(HttpsURLConnection)new URL(apiBase+chatPath).openConnection();
             c.setRequestMethod("POST");c.setDoOutput(true);c.setRequestProperty("Authorization","Bearer "+key);c.setRequestProperty("Content-Type","application/json");
             JSONArray arr=new JSONArray();JSONObject msg=new JSONObject();msg.put("role","user");msg.put("content",q);arr.put(msg);
             JSONObject req=new JSONObject();req.put("model",model);req.put("messages",arr);req.put("stream",false);
@@ -160,9 +164,53 @@ public class MainActivity extends Activity {
         if(!user){LinearLayout acts=new LinearLayout(this);TextView copy=action("Copy");copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("response",value));Toast.makeText(this,"Copied",Toast.LENGTH_SHORT).show();});acts.addView(copy,new LinearLayout.LayoutParams(dp(76),dp(36)));box.addView(acts);}
         messages.addView(box);scrollBottom();
     }
+    void loadProvider(){
+        int count=prefs.getInt("provider_count",1);
+        if(count<1)count=1;
+        activeProvider=Math.max(0,Math.min(activeProvider,count-1));
+        apiBase=prefs.getString("provider_base_"+activeProvider,"https://vyceai.com");
+        modelsPath=prefs.getString("provider_models_"+activeProvider,"/v1/models");
+        chatPath=prefs.getString("provider_chat_"+activeProvider,"/v1/chat/completions");
+    }
+    void showApiManager(){
+        loadProvider();
+        ArrayList<String> names=new ArrayList<>();
+        int count=prefs.getInt("provider_count",1);
+        for(int i=0;i<count;i++) names.add(prefs.getString("provider_name_"+i,"Provider "+(i+1)));
+        String[] items=new String[names.size()+1];
+        for(int i=0;i<names.size();i++) items[i]=names.get(i)+(i==activeProvider?"  ✓":"");
+        items[names.size()]="＋ Add API";
+        new AlertDialog.Builder(this).setTitle("API Manager")
+          .setItems(items,(d,w)->{
+              if(w==names.size()) editProvider(-1);
+              else { activeProvider=w; loadProvider(); loadModels(); Toast.makeText(this,"API: "+names.get(w),Toast.LENGTH_SHORT).show(); }
+          }).setNegativeButton("Close",null)
+          .setNeutralButton("Manage",null).create().show();
+    }
+    void editProvider(int index){
+        boolean isNew=index<0; if(isNew) index=prefs.getInt("provider_count",1);
+        LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); l.setPadding(dp(18),0,dp(18),0);
+        EditText name=new EditText(this); name.setHint("API name"); name.setSingleLine(true);
+        EditText base=new EditText(this); base.setHint("Base URL e.g. https://example.com"); base.setSingleLine(true);
+        EditText key=new EditText(this); key.setHint("API key / token"); key.setSingleLine(true); key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        EditText mp=new EditText(this); mp.setHint("Models endpoint"); mp.setSingleLine(true); mp.setText("/v1/models");
+        EditText cp=new EditText(this); cp.setHint("Chat endpoint"); cp.setSingleLine(true); cp.setText("/v1/chat/completions");
+        if(!isNew){name.setText(prefs.getString("provider_name_"+index,""));base.setText(prefs.getString("provider_base_"+index,""));key.setText(prefs.getString("provider_key_"+index,""));mp.setText(prefs.getString("provider_models_"+index,"/v1/models"));cp.setText(prefs.getString("provider_chat_"+index,"/v1/chat/completions"));}
+        l.addView(name);l.addView(base);l.addView(key);l.addView(mp);l.addView(cp);
+        new AlertDialog.Builder(this).setTitle(isNew?"Add API":"Edit API").setView(l).setPositiveButton("Save",(d,w)->{
+            prefs.edit().putString("provider_name_"+index,name.getText().toString().trim().isEmpty()?"API "+(index+1):name.getText().toString().trim())
+              .putString("provider_base_"+index,base.getText().toString().trim().replaceAll("/$",""))
+              .putString("provider_key_"+index,key.getText().toString().trim())
+              .putString("provider_models_"+index,mp.getText().toString().trim())
+              .putString("provider_chat_"+index,cp.getText().toString().trim())
+              .putInt("provider_count",Math.max(prefs.getInt("provider_count",1),index+1)).apply();
+            activeProvider=index; loadProvider(); loadModels();
+        }).setNegativeButton("Cancel",null).show();
+    }
     void showSettings(){
         LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(18),0,dp(18),0);
-        EditText key=new EditText(this);key.setHint("Vyce API key");key.setText(prefs.getString("key",""));key.setSingleLine(true);key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);l.addView(key);
+        TextView api=text("API Manager",15); api.setTextColor(fg()); api.setPadding(0,dp(8),0,dp(8)); l.addView(api); api.setOnClickListener(v->showApiManager());
+        EditText key=new EditText(this);key.setHint("Legacy Vyce API key (optional)");key.setText(prefs.getString("key",""));key.setSingleLine(true);key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);l.addView(key);
         TextView theme=text("Appearance",14);theme.setTextColor(muted());theme.setPadding(0,dp(18),0,dp(6));l.addView(theme);
         Switch sw=new Switch(this);sw.setText("Dark mode");sw.setTextColor(fg());sw.setChecked(dark);l.addView(sw);
         new AlertDialog.Builder(this).setTitle("Settings").setView(l).setPositiveButton("Save",(d,w)->{prefs.edit().putString("key",key.getText().toString().trim()).putBoolean("dark",sw.isChecked()).apply();dark=sw.isChecked();build();applyBars();applyInsets();loadModels();}).setNegativeButton("Cancel",null).show();
