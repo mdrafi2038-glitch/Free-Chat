@@ -23,7 +23,25 @@ public class MainActivity extends Activity {
     TextView tv(String s,int size){ TextView t=new TextView(this); t.setText(s); t.setTextSize(size); t.setTextColor(Color.WHITE); t.setPadding(dp(12),dp(8),dp(12),dp(8)); return t; }
     Button btn(String s){ Button b=new Button(this); b.setText(s); return b; }
 
-    @Override public void onCreate(Bundle b){super.onCreate(b); prefs=getSharedPreferences("freechat",0); build(); loadModels();}
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        getWindow().setStatusBarColor(Color.rgb(18,18,18));
+        getWindow().setNavigationBarColor(Color.rgb(18,18,18));
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        prefs=getSharedPreferences("freechat",0);
+        build();
+        applySystemInsets();
+        loadModels();
+    }
+
+    void applySystemInsets(){
+        root.setOnApplyWindowInsetsListener((v,insets)->{
+            android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+            v.setPadding(0,bars.top,0,bars.bottom);
+            return insets;
+        });
+        root.requestApplyInsets();
+    }
 
     void build(){
         root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(18,18,18));
@@ -59,8 +77,10 @@ public class MainActivity extends Activity {
 
     void send(){
         String q=input.getText().toString().trim(); if(q.isEmpty())return;
-        String key=prefs.getString("key",""); if(key.isEmpty()){showSettings(); return;}
-        addMessage("You",q); input.setText(""); String model=modelIds.size()>modelSpinner.getSelectedItemPosition()?modelIds.get(modelSpinner.getSelectedItemPosition()):"";
+        String key=prefs.getString("key","");
+        if(key.isEmpty()){showSettings(); return;}
+        addMessage("You",q); input.setText("");
+        String model=modelIds.size()>modelSpinner.getSelectedItemPosition()?modelIds.get(modelSpinner.getSelectedItemPosition()):"";
         new Thread(()->{
             try{
                 HttpsURLConnection c=(HttpsURLConnection)new URL(BASE+"/v1/chat/completions").openConnection();
@@ -76,7 +96,13 @@ public class MainActivity extends Activity {
 
     String read(HttpsURLConnection c)throws Exception{InputStream is=c.getResponseCode()>=400?c.getErrorStream():c.getInputStream(); BufferedReader r=new BufferedReader(new InputStreamReader(is)); StringBuilder s=new StringBuilder(); String l; while((l=r.readLine())!=null)s.append(l); r.close(); return s.toString();}
 
-    void addMessage(String who,String text){LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); TextView h=tv(who,12); TextView b=tv(text,16); b.setTextIsSelectable(true); box.addView(h); box.addView(b); Button copy=btn("Copy"); copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("response",text)); Toast.makeText(this,"Copied",Toast.LENGTH_SHORT).show();}); box.addView(copy,new LinearLayout.LayoutParams(-2,dp(45))); messages.addView(box);}
+    void addMessage(String who,String text){
+        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
+        TextView h=tv(who,12); TextView b=tv(text,16); b.setTextIsSelectable(true);
+        box.addView(h); box.addView(b);
+        Button copy=btn("Copy"); copy.setOnClickListener(v->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("response",text)); Toast.makeText(this,"Copied",Toast.LENGTH_SHORT).show();});
+        box.addView(copy,new LinearLayout.LayoutParams(-2,dp(45))); messages.addView(box);
+    }
 
     void showSettings(){
         LinearLayout l=new LinearLayout(this); l.setPadding(dp(20),dp(10),dp(20),dp(10)); l.setOrientation(LinearLayout.VERTICAL);
