@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
     void loadModels(){
         loadProvider();
         new Thread(()->{try{
-            String key=prefs.getString("provider_key_")+activeProvider,"");
+            String key=prefs.getString("provider_key_"+activeProvider,activeProvider==0?prefs.getString("key",""):"");
             if(key.isEmpty()){runOnUiThread(()->status.setText("Add API key in ⚙ → API Manager"));return;}
             if(key.isEmpty()){runOnUiThread(()->status.setText("Add API key in ⚙"));return;}
             HttpsURLConnection c=(HttpsURLConnection)new URL(apiBase+modelsPath).openConnection();
